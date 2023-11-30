@@ -1,0 +1,17 @@
+---
+title: "Geocoded Adaptation projects database "
+format: html
+editor: visual
+include: false
+cache: false
+---
+
+## Sample
+
+```{r}
+source("scripts/library.R")
+```
+
+```{r}
+
+```
