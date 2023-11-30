@@ -7,4 +7,10 @@ if (!require("pacman")) install.packages("pacman")
 pacman::p_load(
   # setup  
   here,
-  tidyverse)
+  tidyverse,
+  readxl, # read excel
+  labelled, # look_for()
+  janitor, # clean_name()
+  dlookr, # identical()
+  visdat # vis_miss()
+  )
