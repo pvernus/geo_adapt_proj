@@ -12,5 +12,9 @@ pacman::p_load(
   labelled, # look_for()
   janitor, # clean_name()
   dlookr, # identical()
-  visdat # vis_miss()
+  visdat, # vis_miss()
+  xml2, # import XML files
+  XML,
+  usethis # 
   )
+

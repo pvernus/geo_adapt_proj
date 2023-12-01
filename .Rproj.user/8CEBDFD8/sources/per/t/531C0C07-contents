@@ -12,130 +12,167 @@ cache: false
 source("scripts/library.R")
 ```
 
-# OECD CRS
+# Sample
 
-## Data
+We want to know which **country and year** to focus on to test the merging of the OECD CRS and IATI information.
 
-### Import
+Start from existing geocoded project databases. However, available ones don't go beyond 2014 (except AidData's [Global Chinese Development Finance Dataset](#0)). For instance,
 
-```{r import_xl}
+-   AidData Core Research Release, [Version 3.1](https://www.aiddata.org/data/aiddata-core-research-release-level-1-3-1)released in October 2016.
 
-df_2017 <- read_excel(here('data','CRDF-RP-2017.xlsx'),
-                 sheet = '2017') %>% 
-  clean_names()
+-   AidData Nigeria AIMS Geocoded Research Release, [Version 1.3.2](https://www.aiddata.org/data/nigeria-aims-geocoded-research-release-level-1-v1-3-1), released in April 2016.
 
+There is a time mismatch as most adaptation finance really started to pick up later on, around 2016-17.
+
+**Country**: available climate finance data on the OECD CRS covers the period 2000-2021. I can then select the country which has received the most adaptation aid during the last two decades.
+
+**Year**: I see two options here.
+
+-   *First*, using the Publish What You Fund's methodology to merge OECD CRS and IATI data, I could use data from the most recent available year (i.e. 2021). However, the methodology is fastidious and may lead to omitted observations. Its basic idea is to merge both databases at the sector and purpose levels and then clean the merged database for duplicates. The main advantage of this option is the possibility to extend the analysis on all available years (2010-2021).
+
+-   *Second*, the OECD has recently tried to align with the IATI Standard. It has released CRS-IATI XML files with 2018 and 2019, where each CRS record has its own IATI unique identifier. Besides the limitation on the available years, a question on the availability of project-level information remains. As a note, the fact that available data stops before 2020 and the Covid pandemic, is not necessarily a bad thing and could be justified.
+
+From the different information presented above, the best option seems to select the country which has received the most adaptation aid during the whole period for which we have data (2000-2021) and focus on 2019, the most recent year for which we have CRS-IATI XML files.
+
+# Data
+
+## OECD CRS Excel files
+
+We first download the Excel file with all available climate-related development finance data between 2000-2021 from the [OECD CRS](https://www.oecd.org/dac/financing-sustainable-development/development-finance-topics/climate-change.htm). We then import it and clean it for the analysis.
+
+```{r read_excel}
+
+# import
 df_2000_21 <- read_excel(here('data','CRDF-RP-2000-2021.xlsx'),
                  sheet = 'All') %>% 
   clean_names()
 
-# head(df)
-# look_for(df)
-```
-
-```{r data}
-
-data_2017 = df %>% 
-  select(id_crs = crs_identification_n,
-         id_donor = donor_project_n,
-         provider = provider_detailed,
+# select vars and clean
+crs_2000_21 <- df_2000_21 %>% 
+  select(id_crs = crs_identification_n, 
+         id_donor = donor_project_n, 
+         year, 
+         provider,
          extending_agency,
          recipient,
          recipient_region,
-         channel_of_delivery,
+         channel_of_delivery, 
          rio_adaptation = adaptation_objective_applies_to_rio_marked_data_only,
-         value_constant_adaptation = adaptation_related_development_finance_commitment_2021_usd_thousand,
-         value_constant_climate = adaptation_related_development_finance_commitment_2021_usd_thousand,
-         purpose_code,
-         sector_detailed,
+         value_usd_2021 = adaptation_related_development_finance_commitment_2021_usd_thousand,
          sub_sector,
          financial_instrument
-  ) %>% 
-  mutate_at(c('provider', 'extending_agency', 'recipient', 'recipient_region',
-              'rio_adaptation', 'channel_of_delivery', 'sector_detailed', 
-              'sub_sector', 'financial_instrument')
-            , as_factor)
+         ) %>% 
+  mutate(rio_adaptation = as_factor(rio_adaptation))
 
-data_2021 = df_2000_21 %>% 
-  filter(year == 2021) %>% 
-  select(id_crs = crs_identification_n,
-         id_donor = donor_project_n,
-         provider = provider_detailed,
-         extending_agency,
-         recipient,
-         recipient_region,
-         channel_of_delivery,
-         rio_adaptation = adaptation_objective_applies_to_rio_marked_data_only,
-         value_constant_adaptation = adaptation_related_development_finance_commitment_2021_usd_thousand,
-         value_constant_climate = adaptation_related_development_finance_commitment_2021_usd_thousand,
-         purpose_code,
-         sector_detailed,
-         sub_sector,
-         financial_instrument
-  ) %>% 
-  mutate_at(c('provider', 'extending_agency', 'recipient', 'recipient_region',
-              'rio_adaptation', 'channel_of_delivery', 'sector_detailed', 
-              'sub_sector', 'financial_instrument')
-            , as_factor)
+save(df_2000_21, crs_2000_21, file = here('data', 'crs_2000_21.RData'))
+
+# head(crs_2000_21)
+# look_for(crs_2000_21)
 ```
-
-### Sample
 
 ```{r top_recipient_adaptation}
 
 # Top adaptation recipient regions
-data %>% 
-  summarize(value = sum(value_constant_adaptation, na.rm = TRUE), 
+crs_2000_21 %>% 
+  summarize(value = sum(value_usd_2021, na.rm = TRUE), 
             .by = recipient_region) %>% 
   arrange(desc(value))
 
 # Top adaptation recipient countries
-data %>% 
-  summarize(value = sum(value_constant_adaptation, na.rm = TRUE), 
+crs_2000_21 %>% 
+  summarize(value = sum(value_usd_2021, na.rm = TRUE), 
             .by = recipient) %>% 
   arrange(desc(value))
 
 # Top adaptation recipient countries in South of Sahara
-data %>% 
-  filter(recipient_region %in% c('Africa', 'South of Sahara', 'Unspecified')) %>% 
-  summarize(value = sum(value_constant_adaptation, na.rm = TRUE), 
+crs_2000_21 %>% 
+  filter(recipient_region %in% c('Africa', 'South of Sahara')) %>% 
+  summarize(value = sum(value_usd_2021, na.rm = TRUE), 
             .by = recipient) %>% 
   arrange(desc(value))
+  
+# Top adaptation recipient countries in South of Sahara by year
+crs_2000_21 %>% 
+  filter(recipient_region %in% c('Africa', 'South of Sahara')) %>% 
+  summarize(value = sum(value_usd_2021, na.rm = TRUE),
+            n_project = n(),
+            .by = c(year, recipient)) %>%
+  group_by(year) %>% 
+  slice_max(value, n = 3) %>% 
+  arrange(desc(year))
 
+# Same but by number of projects
+crs_2000_21 %>% 
+  filter(recipient_region %in% c('Africa', 'South of Sahara')) %>% 
+  summarize(value = sum(value_usd_2021, na.rm = TRUE),
+            n_project = n(),
+            .by = c(year, recipient)) %>%
+  group_by(year) %>% 
+  slice_max(n_project, n = 3) %>% 
+  arrange(desc(year))
 ```
 
-```{r top_recipient_climate}
+**Ethiopia** was the top recipient of adaptation-related finance in 2019 (and the 3rd top recipient in 2018) for SSA, both in terms of volume and projects.
 
-# Top climate-related ODA recipient regions
-data %>% 
-  summarize(value = sum(value_constant_climate, na.rm = TRUE), 
-            .by = recipient_region) %>% 
-  arrange(desc(value))
+```{r top_recipient_adaptation_principal}
 
-# Top climate-related ODA recipient countries
-data %>% 
-  summarize(value = sum(value_constant_climate, na.rm = TRUE), 
+# Filter for SSA countries and projects with a principal adaptation objectives 
+crs_2000_21_principal <- crs_2000_21 %>% 
+  filter(year >= 2010) %>% # Adaptation Rio marker introduction
+  filter(recipient_region %in% c('Africa', 'South of Sahara') & 
+           rio_adaptation == 'Principal')
+
+# Top adaptation recipient countries in South of Sahara 
+crs_2000_21_principal %>% 
+  summarize(value = sum(value_usd_2021, na.rm = TRUE),
+            n_project = n(),
             .by = recipient) %>% 
   arrange(desc(value))
 
-# Top climate-related ODA recipient countries in South of Sahara
-data %>% 
-  filter(recipient_region %in% c('Africa', 'South of Sahara', 'Unspecified')) %>% 
-  summarize(value = sum(value_constant_climate, na.rm = TRUE), 
-            .by = recipient) %>% 
-  arrange(desc(value))
+# Top adaptation recipient countries in South of Sahara by year
+crs_2000_21_principal %>% 
+  summarize(value = sum(value_usd_2021, na.rm = TRUE),
+            n_project = n(),
+            .by = c(year, recipient)) %>%
+  group_by(year) %>% 
+  slice_max(value, n = 5) %>% 
+  arrange(desc(year))
+
+# Same but by number of projects
+crs_2000_21_principal %>% 
+  summarize(value = sum(value_usd_2021, na.rm = TRUE),
+            n_project = n(),
+            .by = c(year, recipient)) %>%
+  group_by(year) %>% 
+  slice_max(n_project, n = 5) %>% 
+  arrange(desc(year))
 ```
 
-**Ethiopia** was the top country recipient of international climate adaptation public finance in 2017.
+When looking only at commitments with *principal* adaptation objectives, **Ethiopia** is the top recipient country, both in terms of volume and frequency, between 2010 and 2021.
 
-```{r ethiopia_data}
+It is interesting to note that the frequency of overall commitments decrease significantly when keeping only commitments with principal adaptation objectives. Overall in SSA, there have been 9003 such commitments, including 762 in Ethiopia.
 
-ethiopia = data %>% 
-  filter(recipient == 'Ethiopia' & rio_adaptation == 'Principal') 
+## OECD XML files
 
-identical(ethiopia$value_constant_adaptation, ethiopia$value_constant_climate)
+We download the OECD-IATI XML file for Ethiopia and import data for the year 2019.
 
-ethiopia = ethiopia %>% select(-value_constant_climate) %>% 
-  rename(value = value_constant_adaptation)
+```{r test_read_xml}
+
+# import
+use_zip('https://webfs.oecd.org/crs-iati-xml/Recipients/iati_ET.zip',         destdir = here('data'))
+
+# read 
+iati_ET_2019 <- read_xml(here('data','iati_ET','iati_ET_2019.xml'))
+save(iati_ET_2019, file = here('data', 'iati_ET_2019.RData'))
+
+xml_name(iati_ET_2019)
+xml_children(iati_ET_2019)
+
+# Find all IATI identifiers for CRS records
+iati_identifier <- xml_text(xml_find_all(iati_ET_2019, ".//iati-identifier"))
+
+length(xml_text(xml_find_all(iati_ET_2019, ".//iati-identifier"))) # 3489
+
 ```
 
 # IATI

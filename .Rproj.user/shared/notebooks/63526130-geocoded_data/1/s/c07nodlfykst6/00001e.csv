@@ -1,0 +1,11 @@
+"0","crs_2000_21 %>% 
+  filter(recipient_region %in% c('Africa', 'South of Sahara')) %>% 
+  summarize(value = sum(value_usd_2021, na.rm = TRUE),
+            n_project = n(),
+            .by = c(year, recipient)) %>%
+  arrange(desc(value)) %>% 
+  top_n(order_by = year, n = 3)
+"
+"2","Erreur dans top_n(., order_by = year, n = 3) : 
+  argument inutilisé (order_by = year)
+"

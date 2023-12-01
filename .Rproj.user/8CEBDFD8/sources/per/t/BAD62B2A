@@ -1,0 +1,28 @@
+{
+    "id": "BAD62B2A",
+    "path": null,
+    "project_path": null,
+    "type": "object_explorer",
+    "hash": "0",
+    "contents": "",
+    "dirty": false,
+    "created": 1701454773808.0,
+    "source_on_save": false,
+    "relative_order": 3,
+    "properties": {
+        "id": "1469be855e6c468f967d865314fc3f0c",
+        "name": "<iati-activities>",
+        "title": "iati_ET_2019",
+        "language": "R",
+        "source_window_id": "",
+        "Source": "Source"
+    },
+    "folds": "",
+    "lastKnownWriteTime": 1701454348,
+    "encoding": "",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1701454773808,
+    "read_only": false,
+    "read_only_alternatives": []
+}
