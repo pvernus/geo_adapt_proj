@@ -1,0 +1,24 @@
+# install.packages('installr')
+# library(installr)
+# installr()
+# install.RStudio()
+
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load(
+  # setup  
+  here,
+  tidyverse,
+  fuzzyjoin, # inexact matching
+  data.table, # data transformation
+  readxl, # read excel
+  labelled, # look_for()
+  janitor, # clean_name()
+  dlookr, # identical()
+  visdat, # vis_miss()
+  xml2, # import XML files
+  XML,
+  questionr,
+  gtsummary,
+  tidytext,
+  geomtextpath
+  )

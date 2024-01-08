@@ -1,0 +1,218 @@
+---
+title: "Delivery tactics: CRS Microdata"
+format: html
+editor: visual
+---
+
+```{r}
+source(here::here('scripts', 'library.R'))
+# load(here('data', 'crs_data_selected.RData'))
+```
+
+# Import CRS datasets
+
+I extracted files for each year between 2002 and 2021 from the QWIDS platform by the OECD (i.e. 20 files in total).
+
+```{r import}
+
+folder_path <- here('data', 'crs')
+
+file_list <- list.files(path = folder_path, full.names = TRUE)
+
+read_clean_and_process <- function(file_path) {
+  data <- fread(file_path) |> 
+    clean_names()
+  return(data)
+}
+
+data_list <- lapply(file_list, read_clean_and_process)
+
+data_combined <- rbindlist(data_list)
+
+save(data_combined, file = here('data', 'crs_data_combined.RData'))
+
+```
+
+```{r select_vars}
+
+data_selected <- data_combined |> 
+  select(1:26, 39, 44:54, 57:59, 62:67, 74:77, 78) |> 
+  mutate_if(is.character, str_trim)
+
+save(data_selected, file = here('data', 'crs_data_selected.RData'))
+
+```
+
+# Manipulate data set
+
+## Donor type
+
+```{r donor_type_name}
+
+# list of Donor types from tge DAC CRS Codes
+dac_member_list <- c(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 18, 20, 21, 22, 40, 50, 59, 61, 68, 69, 75, 76, 84, 301, 302, 701, 742, 801, 820, 918)
+
+multilateral_list <- c(104, 807, 811, 812, 901, 902, 903, 905, 906, 907, 909, 910, 913, 914, 915, 921, 923, 926, 928, 932, 940, 944, 948, 951, 952, 953, 954, 956, 958, 959, 960, 962, 963, 964, 966, 967, 971, 974, 976, 978, 979, 980, 981, 982, 983, 988, 990, 992, 997, 1011, 1012, 1013, 1014, 1015, 1016, 1017, 1018, 1019, 1020, 1023, 1024, 1025, 1037, 1038, 1039, 1041, 1044, 1045, 1046, 1047, 1048, 1049, 1050, 1052, 1053, 1054, 1055, 1311, 1312, 1313, 1401, 1404, 1406, 1409)
+
+non_dac_member_list <- c(26, 30, 45, 55, 62, 70, 72, 77, 82, 83, 87, 130, 133, 358, 543, 546, 552, 561, 566, 576, 611, 613, 732, 764, 765)
+
+private_donor_list <- c(1601, 1602, 1603, 1604, 1605, 1606, 1607, 1608, 1609, 1610, 1611, 1612, 1613, 1614, 1615, 1616, 1617, 1618, 1619, 1620, 1621, 1622, 1623, 1624, 1625, 1626, 1627, 1628, 1629, 1630, 1631, 1632, 1633, 1634, 1635, 1636, 1637, 1638, 1639, 1640, 1641, 1642, 1643, 1644, 1645, 1646, 1647, 1648)
+
+# Note: manually add the following donor_code, because not included in the DAC CRS Codelist: 59, 1054, 1053, 1055, 1404, 1409, 1648.
+
+# create new variable donor_type_name
+data_donor_type <- data_selected |> 
+  mutate(donor_type_name = fct(case_when( # Donor types
+      donor_code %in% dac_member_list ~ 'DAC Members',
+      donor_code %in% multilateral_list ~ 'Multilateral Donors',
+      donor_code %in% non_dac_member_list ~ 'Non-DAC Members',
+      donor_code %in% private_donor_list ~ 'Private Donors'
+    )), .after = donor_code)
+
+```
+
+## Agency type
+
+```{r agency_type}
+
+agency_crs_code <- read_xlsx(here('data', 'dac_crs_codes.xlsx'),
+          sheet = 'Agency') |> 
+  clean_names() |> 
+  mutate_if(is.character, str_squish)
+
+# Note: use anti_join to check missing agency names in agency_crs_code
+
+# add new agency_type vars
+data_agency_type <- data_donor_type |> 
+  left_join(agency_crs_code |> 
+              select(donorcode, agency_code, agency_type, agency_type_name = type_name_e), 
+                        by = c(donor_code = 'donorcode', 
+                               agency_code = 'agency_code')) |> 
+  mutate(agency_type_name = fct(agency_type_name)) |> 
+  relocate(c(agency_type, agency_type_name), .after = agency_name)
+
+# add agency code and type for non-State providers (i.e. Multilateral and Private Donors)
+data_agency_type <- data_agency_type |> 
+  mutate(
+    agency_type = case_when(
+      donor_type_name %in% c('Multilateral Donors', 'Private Donors') & agency_code == 1 ~ 1,
+      donor_type_name %in% c('Multilateral Donors', 'Private Donors') & agency_code != 1 ~ 2,
+      donor_code == 12 & agency_code %in% c(23:28, 30) ~ 2, # UK
+      donor_code == 50 & agency_code == 59 ~ 2, # Spain
+      donor_code == 62 & agency_code %in% (23:24) ~ 2, # Croatia
+      donor_code == 546 & agency_code == 15 ~ 1, # Israel
+      donor_code == 546 & agency_code != 15 ~ 2,
+      .default = as.numeric(agency_type)
+      ),
+    agency_type_name = fct(case_when(
+      donor_type_name %in% c('Multilateral Donors', 'Private Donors') & agency_code == 1 ~ 'Main Aid Agencies (in terms of budget)',
+      donor_type_name %in% c('Multilateral Donors', 'Private Donors') & agency_code != 1 ~ 'Other Extending Aid Agencies',
+      donor_code == 12 & agency_code %in% c(23:28, 30) ~ 'Other Extending Aid Agencies',
+      donor_code == 50 & agency_code == 59 ~ 'Other Extending Aid Agencies',
+      donor_code == 62 & agency_code %in% (23:24) ~ 'Other Extending Aid Agencies',
+      donor_code == 546 & agency_code == 15 ~ 'Main Aid Agencies (in terms of budget)',
+      donor_code == 546 & agency_code != 15 ~ 'Other Extending Aid Agencies',      
+      .default = as.character(agency_type_name))
+    ))
+
+rm(data_donor_type)
+```
+
+## Nature of submission
+
+See OECD's [Reporting Directives](https://one.oecd.org/document/DCD/DAC/STAT(2020)44/FINAL/En/pdf). (Nature of Submission – 379, p.86)
+
+```{r new_activity_reported}
+
+data_initial_report <- data_agency_type |>
+  mutate(
+    new_activity_reported = as_factor(
+      if_else(initial_report == 1, "Yes", "No")
+    ),
+    .after = initial_report
+  )
+
+rm(data_agency_type)
+```
+
+## Region
+
+```{r}
+
+data_region <- data_initial_report |>
+  mutate(
+    africa = if_else(region_name %in% c(
+      "North of Sahara", "South of Sahara",
+      "Africa", "Africa, regional"
+    ),
+    "Yes", "No"
+    ),
+    .after = region_name
+  )
+
+rm(data_initial_report)
+```
+
+## Income group
+
+```{r}
+
+```
+
+## Flow type
+
+```{r}
+
+```
+
+## Bi/Multi
+
+```{r}
+
+```
+
+## Channel of delivery
+
+```{r}
+
+```
+
+```{r manipulate}
+
+ |>  
+  mutate(recipient_income_group = fct_relevel( # Recipient Income Group
+      income_group_name,
+      c("LDCs", "Other LICs", "LMICs", "UMICs", 
+        "MADCTs", "Part I unallocated by income"),
+      .after = income_group_name)) |> 
+  mutate(bi_multi_group = fct(case_when( # Bi-/Multi Donor Group
+      bi_multi %in% c(1, 3, 7, 8),  ~ 'Bilateral',
+      bi_multi %in% c(2, 4) ~ 'Multilateral',
+      bi_multi == 6 ~ 'Private Sector'
+    )), .after = bi_multi) |> 
+  mutate(bi_multi_name = fct(case_when(
+      bi_multi == 1,  ~ 'Bilateral',
+      bi_multi == 3,  ~ 'Bilateral (core contributions to NGOs and other private bodies / PPPs)',
+      bi_multi == 7,  ~ 'Bilateral (triangular co-operation)',
+      bi_multi == 2,  ~ 'Multilateral (inflows)',
+      bi_multi == 4,  ~ 'Multilateral (outflows)',
+      bi_multi == 6,  ~ 'Private Sector (outflows)'
+  )), .after = bi_multi_group) |> 
+  mutate(flow_name = fct_relevel(
+    flow_name,
+    c("ODA Grants", "Equity Investment", "ODA Loans")
+  ))
+  
+
+# Save
+save(oecd_crdf_rp_2000_21, oecd_climate_2013_21,
+  file = here("data", "oecd", "oecd_crdf_rp_2000_21.RData")
+)
+
+```
+
+Check for NAs
+
+Rbind year data sets
+
+Test merging with climate-related data set by oecd id, only selecting climate-relevant vars.
